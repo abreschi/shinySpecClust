@@ -1,0 +1,10 @@
+name: shinyspecclust
+title:
+username:
+account: abreschi
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 295448
+bundleId: 1265435
+url: https://abreschi.shinyapps.io/shinyspecclust/
+when: 1520903817.9797
