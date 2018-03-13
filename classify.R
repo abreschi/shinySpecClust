@@ -1,14 +1,15 @@
-library(data.table)
-library(lubridate)
-library(dtw)
-library(ggplot2)
-library(proxy)
-library(padr)
-library(imputeTS)
-library(zoo)
-library(pdist)
-library(optparse)
-library(xts)
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(dtw))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(proxy))
+suppressPackageStartupMessages(library(padr))
+suppressPackageStartupMessages(library(imputeTS))
+suppressPackageStartupMessages(library(zoo))
+suppressPackageStartupMessages(library(pdist))
+suppressPackageStartupMessages(library(optparse))
+suppressPackageStartupMessages(library(xts))
+suppressPackageStartupMessages(library(dplyr))
 
 # ~~~~~~~
 # OPTIONS
@@ -28,15 +29,11 @@ option_list <- list(
 		Has header, 1st col is window id, 
 		remaining columns are CGM values"),
 
-	make_option(c("-k", "--nb_clusters"), default=3,
-		help="Number of desired clusters [default=%default]"),
+#	make_option(c("-k", "--nb_clusters"), default=3,
+#		help="Number of desired clusters [default=%default]"),
 
-	make_option(c("-l", "--labels"),
-		help="Two columns file with id and label. Rows
-		should be in the same order as input"),
-
-	make_option(c("-o", "--output"), default="train.param_list.Rdata",
-		help="Output file name. Should be .Rdata [default=%default]"),
+	make_option(c("-o", "--output"), default="stdout",
+		help="Output file name. [default=%default]"),
 
 	make_option(c("-v", "--verbose"), default=FALSE, action="store_true",
 		help="Verbose output")
@@ -147,7 +144,7 @@ smooth_windows = function(x) {
 	smooth_weights = c(1,2,4,8,16,8,4,2,1)
 	p = (length(smooth_weights)-1)/2
 	n = length(x)
-	smoothed = c(x[1:p], filter(x, 
+	smoothed = c(x[1:p], stats::filter(x, 
 		smooth_weights/sum(smooth_weights), 
 		sides=2)[(p+1):(n-p-1)], x[(n-p):n])
 	return (smoothed)
@@ -156,7 +153,7 @@ smooth_windows = function(x) {
 
 smooth_WA = function(x) {	
 	smooth_weights = c(1,2,4,8,16,24,16,8,4,2,1)
-	smoothed = round(filter(x, 
+	smoothed = round(stats::filter(x, 
 		smooth_weights/sum(smooth_weights), sides=2, 
 		circular=T), 2)
 	return (smoothed)
@@ -473,6 +470,20 @@ classify_windows = function(cgm, train_windows, param_list) {
 	train = prepare_training_set(test, train_windows, param_list)
 	test = predict_windows(test, train)
 	ts = reshape_test_windows(test, train)
+	return (ts)
+}
+
+
+classify_windows2 = function(cgm, train_windows, param_list) {
+	# wrapper function for predicting windows
+	# same as classify_windows but the output has only the window labels
+	test = prepare_test_set(cgm, param_list)
+	train = prepare_training_set(test, train_windows, param_list)
+	test = predict_windows(test, train)
+	DT = data.table(test$cgm_w_windows)[windowPos==1,] %>% 
+		.[,label:=test$test_labels[windowId]] %>% 
+		.[,c(4,6)]
+	return (DT)
 }
 
 
@@ -488,14 +499,19 @@ if(length(args)!=0) {
 	print("Running")
 
 	# Input files
-	cgmF = opt$input
+	cgmF = ifelse(opt$input == "stdin", 
+		'file:///dev/stdin', opt$input)
 	windowsF = opt$train_windows
 	paramF = opt$parameters
 	
-	# Input variables for debugging
-	paramF = "train.overlap_37+window_2.5.params.Rdata"
-	cgmF = "cgm.test.tsv"
-	windowsF = "0_preprocessing/raw/rawDexcomSeries+overlap_37+window_2.5+user_all"
+	# Output
+	outF = ifelse(opt$output == "stdout", 
+		"", opt$output)
+	
+#	# Input variables for debugging
+#	paramF = "train.overlap_37+window_2.5.params.Rdata"
+#	cgmF = "cgm.test.tsv"
+#	windowsF = "0_preprocessing/raw/rawDexcomSeries+overlap_37+window_2.5+user_all"
 	
 	# read input files
 	cgm = fread(cgmF)
@@ -503,7 +519,10 @@ if(length(args)!=0) {
 	load(paramF)
 	
 	# Classify windows
-	ts = classify_windows(cgm, train_windows, param_list)
+	pred = classify_windows2(cgm, train_windows, param_list)	
+
+	# Write predictions to file
+	write.table(pred, outF, sep='\t', quote=F, row.names=F)		
 
 }
 
