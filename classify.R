@@ -29,6 +29,11 @@ option_list <- list(
 		Has header, 1st col is window id, 
 		remaining columns are CGM values"),
 
+	make_option(c("-O", "--overlap"), default=0.25,
+		help="Fraction of window overlap. For example 
+		an overlap of 0.25 for 2.5 hour windows is
+		37 mins, meaning a shift of 112 mins. [default=%default]"),
+
 #	make_option(c("-k", "--nb_clusters"), default=3,
 #		help="Number of desired clusters [default=%default]"),
 
@@ -169,6 +174,9 @@ preprocess_cgm = function(m) {
 	padm = pad( thicken( m, interval="5 min" )[,-1])
 	# Swap columns after padding
 	padm = padm[, c(2,1)]
+
+	# Make sure glucose values are numeric
+	padm[,2] = as.numeric(padm[[2]])
 
 	# Impute missing values up to <minutes>	
 	gluc_na_idx = get_na_stretches(padm[[2]], minutes)
@@ -349,7 +357,7 @@ get_labels = function(Y) {
 }
 
 
-prepare_test_set = function(cgm, param_list) {
+prepare_test_set = function(cgm, param_list, window_overlap=0.25) {
 	test = list()
 	# Process query profile
 	# ----------------------
@@ -359,7 +367,6 @@ prepare_test_set = function(cgm, param_list) {
 	# The size has to be fixed because it depends on the 
 	# training set to compute the distance
 	window_size = "150 mins"
-	window_overlap = 0.25
 	test$test = make_windows(proc_cgm, window_size, window_overlap)
 	# Annotate cgm profile with window id
 	test$cgm_w_windows = annotate_cgm_windows(proc_cgm, window_size, window_overlap)
@@ -464,9 +471,9 @@ reshape_test_windows = function(test, train) {
 }
 
 
-classify_windows = function(cgm, train_windows, param_list) {
+classify_windows = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for classifying windows
-	test = prepare_test_set(cgm, param_list)
+	test = prepare_test_set(cgm, param_list, window_overlap)
 	train = prepare_training_set(test, train_windows, param_list)
 	test = predict_windows(test, train)
 	ts = reshape_test_windows(test, train)
@@ -474,10 +481,10 @@ classify_windows = function(cgm, train_windows, param_list) {
 }
 
 
-classify_windows2 = function(cgm, train_windows, param_list) {
+classify_windows2 = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for predicting windows
 	# same as classify_windows but the output has only the window labels
-	test = prepare_test_set(cgm, param_list)
+	test = prepare_test_set(cgm, param_list, window_overlap)
 	train = prepare_training_set(test, train_windows, param_list)
 	test = predict_windows(test, train)
 	DT = data.table(test$cgm_w_windows)[windowPos==1,] %>% 
@@ -507,6 +514,8 @@ if(length(args)!=0) {
 	# Output
 	outF = ifelse(opt$output == "stdout", 
 		"", opt$output)
+	# Window overlap
+	window_overlap = opt$overlap
 	
 #	# Input variables for debugging
 #	paramF = "train.overlap_37+window_2.5.params.Rdata"
@@ -519,7 +528,7 @@ if(length(args)!=0) {
 	load(paramF)
 	
 	# Classify windows
-	pred = classify_windows2(cgm, train_windows, param_list)	
+	pred = classify_windows2(cgm, train_windows, param_list, window_overlap)	
 
 	# Write predictions to file
 	write.table(pred, outF, sep='\t', quote=F, row.names=F)		
