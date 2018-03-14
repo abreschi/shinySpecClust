@@ -17,9 +17,14 @@ suppressPackageStartupMessages(library(dplyr))
 
 option_list <- list(
 
-	make_option(c("-i", "--input"), default="stdin",
+	make_option(c("-i", "--input"), 
 		help="File with CGM profile. 2 columns: 
 		<date>, <value>. Has header [default=%default]"),
+
+	make_option(c("-t", "--test_windows"), 
+		help="File with windows. Provide in alternative to 
+		--input. Format is windowId in col1 and raw values 
+		in the other cols. Has NO header"),
 
 	make_option(c("-P", "--parameters"), 
 		help=".Rdata file with trained parameters."),
@@ -471,6 +476,21 @@ reshape_test_windows = function(test, train) {
 }
 
 
+prepare_test_windows = function(test_windows, param_list) {
+	# Prepare test set from windows rather than from cgm profile
+	test = list()
+	test$windowID = test_windows[[1]]
+	test$test = test_windows[,-1]
+	# Scale baed on train parameters
+	test$test = scale_windows(test$test, 
+		param_list$train_mean, param_list$train_sd)
+	# Smooth windows individually
+	test$test = t(apply(test$test, 1, smooth_windows))
+	# prepare labels for classification
+	test$test_labels = rowSums(test$test)
+	return(test)
+}
+
 classify_windows = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for classifying windows
 	test = prepare_test_set(cgm, param_list, window_overlap)
@@ -493,6 +513,14 @@ classify_windows2 = function(cgm, train_windows, param_list, window_overlap) {
 	return (DT)
 }
 
+classify_test_windows = function(test_windows, train_windows, param_list) {
+	# Classify windows without profile
+	test = prepare_test_windows(test_windows, param_list)
+	train = prepare_training_set(test, train_windows, param_list)
+	test = predict_windows(test, train)
+	DT = data.table(windowID = test$windowID, label=test$test_labels)
+	return (DT)
+}
 
 
 # ~~~~~~~~~~~
@@ -505,9 +533,17 @@ if(length(args)!=0) {
 
 	print("Running")
 
+	if (!is.null(opt$input) & !is.null(opt$test_windows)) {
+		cat("Error: Provide cgm profile OR windows\n")
+		q(save='no')
+	}
+
 	# Input files
-	cgmF = ifelse(opt$input == "stdin", 
-		'file:///dev/stdin', opt$input)
+	cgmF = opt$input; if(!is.null(opt$input)) {if( opt$input == "stdin") {
+		cgmF = 'file:///dev/stdin'}}
+	testF = opt$test_windows; if(!is.null(opt$test_windows)) { 
+		if (opt$test_windows == "stdin") {
+		testF = 'file:///dev/stdin'}}
 	windowsF = opt$train_windows
 	paramF = opt$parameters
 	
@@ -523,16 +559,25 @@ if(length(args)!=0) {
 #	windowsF = "0_preprocessing/raw/rawDexcomSeries+overlap_37+window_2.5+user_all"
 	
 	# read input files
-	cgm = fread(cgmF)
+	if (!is.null(cgmF)) {cgm = fread(cgmF)}
+	if (!is.null(testF)) {test_windows = fread(testF, h=F)}
 	train_windows = fread(windowsF)
 	load(paramF)
 	
-	# Classify windows
-	pred = classify_windows2(cgm, train_windows, param_list, window_overlap)	
+	# Classify windows from profile
+	if(!is.null(cgmF)) {
+		pred = classify_windows2(cgm, train_windows, 
+		param_list, window_overlap)	
+	}
+	
+	# Classify windows directly (not profile)
+	if (!is.null(testF)) {
+		pred = classify_test_windows(test_windows,
+		train_windows, param_list)
+	}
+
 
 	# Write predictions to file
-	write.table(pred, outF, sep='\t', quote=F, row.names=F)		
+	write.table(pred, outF, sep='\t', quote=F, row.names=F)
 
 }
-
-
