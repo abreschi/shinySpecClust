@@ -81,6 +81,13 @@ ui <- fluidPage(
 		body {
 			margin-left: 2rem;
 		}
+		.action-button {
+			font-size: 1em;
+		}
+		.input-group * {
+			font-size: 1em;
+			height: auto;
+		}
 	"))),
 
 	title = "CGM viewer",
@@ -111,7 +118,7 @@ ui <- fluidPage(
 		
 		column(3,
 			style="margin-left: 4rem;",
-			fileInput(inputId = "cgmF", 
+			fileInput(inputId = "cgmF",
 				"Upload CGM profile",
 				multiple = TRUE,
 				accept = c("text/csv",
@@ -130,7 +137,7 @@ ui <- fluidPage(
 		column(2, 
 
 			actionButton(inputId = "glucotype",
-				"Classify glucotype"
+				"Classify glucotype",
 			),
 			actionButton(inputId = "reset",
 				"Clear"
