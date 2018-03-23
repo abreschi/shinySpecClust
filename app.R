@@ -80,6 +80,8 @@ ui <- fluidPage(
 		}
 		body {
 			margin-left: 2rem;
+			margin-right: 4rem;
+			max-width: 1800px;
 		}
 		.action-button {
 			font-size: 1em;
@@ -94,7 +96,7 @@ ui <- fluidPage(
 	HTML("
 		<div style='display: flex'> 
 			<h1 style='align-self: center; flex-grow: 1'>CGM viewer</h1>
-			<img style='max-width:250px; min-width:200px; margin: 3rem' 
+			<img style='width:auto; max-height: 80px; margin: 3rem' 
 				src='Stanford_Medicine_logo-web-CS.trim.png' alt='logo'>
 		</div>
 	"),
@@ -148,7 +150,7 @@ ui <- fluidPage(
 	),
 	
 	fluidRow(
-		column(10,
+		column(12,
 			tags$div(id = "dygraphContainer",
 				style = "position: relative; text-align: center; margin: 1rem auto;",
 				tags$div(
@@ -157,9 +159,6 @@ ui <- fluidPage(
 					uiOutput(outputId = "dygraphDesc")
 				)
 			)
-		),
-		column(2,
-			plotOutput("plot")
 		)
 	),
 
