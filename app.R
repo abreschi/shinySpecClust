@@ -190,10 +190,11 @@ server <- function(input, output, session) {
 
 	# Read 	
 	read_cgmF = function(f) {
-		df = read.csv(f,
-			header = TRUE,
-			sep = "\t",
-			quote = ""
+		df = tryCatch( {
+			read.table(f, sep='\t', h=T, quote="")}, 
+			error=function(e) 
+			read.table(f, sep='\t', 
+				fileEncoding="UTF-16LE", h=T, quote="")
 		)
 		df[[1]] = ymd_hms(df[[1]])
 		return (df)
