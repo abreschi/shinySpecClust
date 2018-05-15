@@ -507,8 +507,9 @@ classify_windows2 = function(cgm, train_windows, param_list, window_overlap) {
 	test = prepare_test_set(cgm, param_list, window_overlap)
 	train = prepare_training_set(test, train_windows, param_list)
 	test = predict_windows(test, train)
+	glucotypes = define_glucotypes(train)
 	DT = data.table(test$cgm_w_windows)[windowPos==1,] %>% 
-		.[,label:=test$test_labels[windowId]] %>% 
+		.[,label:=glucotypes[test$test_labels[windowId]]] %>% 
 		.[,c(4,6)]
 	return (DT)
 }
