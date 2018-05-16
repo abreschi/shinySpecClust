@@ -284,7 +284,7 @@ sample_training = function(Y, kM, N) {
 	l = kM$cluster
 	idx = unlist( 
 		sapply(unique(l), function(x) 
-			sample(which(l==x), round(mean(l==x)*N), 
+			sample(which(l==x), ceiling(mean(l==x)*N), 
 			prob=dk[cbind(1:length(l), l)][l==x]) 
 		)
 	)
@@ -433,8 +433,8 @@ predict_windows = function(test, train) {
 	
 	# This computes the distance to the k-means 
 	# centers on the transformed space
-	test_labels_na_omit = apply(f, 1, function(x) { 
-		which.max(tcrossprod(x, train$centers)) } )
+	test_labels_na_omit = apply(tcrossprod(f, train$centers),
+		1, which.max) 
 	# Restore NAs
 	test$test_labels[!is.na(test$test_labels)] = test_labels_na_omit 
 	#df = merge(melt(as.matrix(test)), as.data.frame(test_labels), by.x="Var1", by.y='row.names')
