@@ -582,3 +582,4 @@ if(length(args)!=0) {
 	write.table(pred, outF, sep='\t', quote=F, row.names=F)
 
 }
+
