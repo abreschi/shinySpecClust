@@ -524,6 +524,274 @@ classify_test_windows = function(test_windows, train_windows, param_list) {
 }
 
 
+cv = function(x) {
+	sd(x,na.rm=T)/mean(x,n.rm=T)
+}
+
+rank_glucose_values = function(d) {
+	# Finds most represented glucose value ranges,
+	# out of 10 ranges, specific to the dataset.
+	# Returns the ranking
+	# --------------------------------------------
+	# d is data.table with col1: timestamp, col2: glucose value
+	# Already preprocessed
+	cuts = as.numeric(cut(d[[2]], 10))
+	gr = rank(table(cuts))[cuts]
+	return(gr)
+}
+
+baseline_from_rank = function(d, gr) {
+	# Get median of most frequently occurring glucose values
+	# -------------------------------------------------------
+	# d is data.table with col1: timestamp, col2: glucose value
+	# Already preprocessed
+	baseline = median(d[gr==9|gr==10][[2]])
+	return(baseline)
+}
+
+get_baseline_rank = function(x) {
+	# From unprocessed glucose values get baseline
+	# based on most frequently occurring glucose values
+	# -------------------------------------------------------
+	# x is data.table with col1: timestamp, col2: glucose value	
+	d = preprocess_cgm(x)
+	gr = rank_glucose_values(d)
+	baseline = baseline_from_rank(d, gr)
+	return (baseline)
+}
+
+smooth_cq = function(cq) {
+	cqs = as.integer(rollapply(zoo(cq), 5, 
+		median, na.rm=T, na.pad=T, partial=T))
+	return(cqs)
+}
+
+cq_gap_wilcox = function(windows, x, y) {
+	pvalue = mapply(function(x,y) {
+		wilcox.test(unlist(windows[x,]), unlist(windows[y,]), 
+			'greater')$p.value
+		}, x, y)
+	return(pvalue)
+}
+
+fill_gaps = function(cqs, windows) {
+# -- Fill the gaps --
+	# Find stretches of consecutive windows in the same 30% quantile
+	stretch = rle(cqs==1 & !is.na(cqs))
+	# Total length of adjacent low variance windows without gap
+	ll = rollsum(stretch$lengths[stretch$values], 2)
+	# Total length of adjacent low variance windows including gap
+	llgap = rollsum(stretch$lengths, 3)[stretch$values]
+	# Gap lengths
+	gaps = stretch$lengths[which(stretch$values)[1:(sum(stretch$values)-1)] +1]
+	# Indeces of gaps
+	gaps_idx = which(stretch$values)[1:(sum(stretch$values)-1)] +1
+	
+	# Corresponding window indeces for gaps, before, and after gaps	
+	gaps_wins = mapply(seq, c(0,cumsum(stretch$lengths))[gaps_idx]+1,  
+		cumsum(stretch$lengths)[gaps_idx])
+	gaps_before_wins = mapply(seq, c(0,cumsum(stretch$lengths))[gaps_idx-1]+1,  
+		cumsum(stretch$lengths)[gaps_idx-1])
+	gaps_after_wins = mapply(seq, c(0,cumsum(stretch$lengths))[gaps_idx+1]+1,  
+		cumsum(stretch$lengths)[gaps_idx+1])
+	
+	# Test before and after 
+	before_greater = cq_gap_wilcox(windows, gaps_before_wins, gaps_wins)
+	after_greater = cq_gap_wilcox(windows, gaps_after_wins, gaps_wins)
+	
+	# Get the index of gap to fill
+	gaps_fill_idx = which(gaps <= 5 & ll/llgap <= 2/3 & before_greater <= 0.05 & after_greater <= 0.05)
+	
+	# Fill gaps in smoothed quantiles
+	cqsf = replace(cqs, unlist(gaps_wins[gaps_fill_idx]), 1)
+	
+	return (cqsf)
+}
+
+longest_stretch = function(x) {
+	# Initialize resulting vector
+	xo = rep(0, length(x))
+	# Count consecutive strethes
+	wr = rle(as.numeric(x == 1 & !is.na(x)))
+	# Find relative id of longest stretch of flat windows
+	ll = which.max(wr$lengths[wr$values == 1])
+	# Find absolute id of longest stretch of flat windows
+	lla = which(wr$values == 1)[ll]
+	# Check if longest stretch is in the middle of the window but the window starts and/or end with a stretch
+	if ( (ll > 1 & ll < sum(wr$values)) & (wr$values[1] == 1 | wr$values[length(wr$values)] == 1) ) {return(xo)}
+	#cumsum(wr$lengths)[wr$values == 0][ll] > cumsum(wr$lengths)[wr$values == 1][ll]
+	# Assign 1s to resulting vector only for longest stretch
+	xo[ max(1, cumsum(wr$lengths)[lla-1]) : cumsum(wr$lengths)[lla] ] <- 1
+#	print(cumsum(wr$lengths)[max(1, lla-1)] : cumsum(wr$lengths)[lla] )
+	return(xo)
+}
+
+sleep_periods = function(d) {
+	# Find periods of stable glucose values from 
+	# processed cgm data
+	# ------------------------------------------
+	# Extract column names
+	timecol = colnames(d)[1]
+	valuecol = colnames(d)[2]
+	# Generate the windows
+	windows = make_windows(d, '2.5 hours', 0.75)
+	wins = data.table(annotate_cgm_windows(d, "2.5 hours", 0.75))
+	# Assign windows to quantiles based on their coefficient of variation
+	win_cv = apply(windows, 1, cv)
+	cq = as.numeric(cut(win_cv, c(0, quantile(win_cv, 
+		probs=c(3:10)/10, na.rm=T))))
+	wins$cq = cq[wins$windowId]
+	#wins$day = floor_date(wins$DisplayDate_5_min, 'days')
+	# Smooth quantiles - TODO: improve padding
+	cqs = smooth_cq(cq) 
+	wins$cqs = cqs[wins[["windowId"]]]
+	# Fill the gaps
+	cqsf = fill_gaps(cqs, windows)
+	# Reassign quantiles after gap filling
+	wins$cqsf = cqsf[wins[["windowId"]]]
+	# Find the sleep periods by shifting 24 hour-window
+	ann_wins = shift_24_hours(wins, d)
+	
+	gp = ggplot(data.frame(cv=win_cv)) + 
+		geom_histogram(aes(cv), fill='salmon') + 
+		geom_vline(data=data.frame(cv=c(0, 
+		quantile(win_cv, probs=1:10/10, na.rm=T))), 
+		aes(xintercept=cv)) + 
+		geom_vline(xintercept=quantile(win_cv, probs=0.3, na.rm=T), size=3)
+
+	gp = ggplot(
+			cbind( 
+				wins, 
+				days = floor_date(wins[[timecol]], 'days'),
+				xend = wins[[timecol]] + hours(2) + minutes(30)
+			),
+			aes_string(timecol, valuecol)) + 
+		geom_line() + 
+		geom_point(aes(color=as.factor(cq))) + 
+		scale_color_manual(values=rainbow(10)) + 
+		facet_wrap(~days, scales='free_x') + 
+	#	geom_segment(data=wins[windowPos==1, xend:=get(timecol)+hours(2)+minutes(30)], aes_string(
+	#			x=timecol, 
+	#			xend="xend",
+	#			y=30,
+	#			yend=30, 
+	#			color=as.factor(cq)
+	#		), 
+	#		size=2, alpha=0.5) + 
+		geom_vline(data=wins[wins[, un:=length(unique(cqs))==1, 
+			by=c(timecol)][["un"]]][cqs==1,], 
+			aes_string(xintercept=timecol), alpha=0.2, size=2) +
+		geom_vline(data=data.table(wins)[cqs==1], aes_string(xintercept=timecol), 
+			alpha=0.2, size=2, color='pink') 
+#		geom_hline(yintercept=92) +
+#		geom_hline(yintercept=100)
+#	ggsave('tmp.pdf', plot=gp, h=15, w=20)
+	# Find the longest periods of low variation per day
+	return(ann_wins)
+}
+
+
+shift_24_hours = function(wins, d) {
+	# Move a 24 hour-windows every 6 hours to find
+	# the longest stretches of stable glucose every 
+	# daily cycle.
+	# ---------------------------------------------
+	# Extract column names
+	timecol = colnames(d)[1]
+	valuecol = colnames(d)[2]
+	# Parameters for windows
+	win_size = 24
+	win_shift = 6
+	# Select only one cqsf for each timepoint (the minimum) 
+	ann_wins = wins[, list(cqsf=as.numeric(min(cqsf)==1)), 
+		by=c(timecol, valuecol)]
+	ann_wins[, win_idx:= 1+ as.numeric(seconds(interval(first(get(timecol)), 
+		get(timecol)))) %/% (win_size*3600)]
+	ann_wins[, shift_idx:= 1+ as.numeric(seconds(interval(first(get(timecol)), 
+		get(timecol)))) %/% (win_shift*3600)]
+	ann_wins$flats = rep(0, nrow(ann_wins))
+	# Find the longest stretch within each window
+	for ( i in 0:(win_size/win_shift -1) ) {
+		ann_wins$factor = ann_wins$win_idx + 
+			as.numeric((ann_wins$shift_idx-1) %% (win_size/win_shift) >= i) -1; 
+		flats_i = ann_wins[, longest_stretch(cqsf), by="factor"][["V1"]]; 
+		ann_wins$flats = as.numeric( ann_wins$flats | flats_i) 
+		# Plot glucose values with shaded shifted windows of 24 hours
+		gp = ggplot(cbind(ann_wins, days=floor_date(ann_wins[[colnames(d)[1]]], "days")), 
+			aes_string(colnames(d)[1], colnames(d)[2])) + 
+			facet_wrap(~days, scales="free_x") + 
+			geom_vline(aes(xintercept=DisplayDate_5_min, alpha=flats), color='pink', size=2) + 
+			geom_line() + 
+			geom_vline(aes(xintercept=DisplayDate_5_min, color=factor%%2==1), alpha=0.1, size=2) + 
+			scale_color_manual(values=c("orange", "blue"))
+	}
+	return(ann_wins)
+} 
+
+ann_wins_to_intervals = function(ann_wins, d) {
+	# Extract intervals of sleep or stable glucose
+	# from annotated timepoints
+	# --------------------------------------------
+	# Extract column names
+	timecol = colnames(d)[1]
+	valuecol = colnames(d)[2]
+	# Find contiguous timepoints of stable glucose
+	# or estimated sleep
+	stretches = rle(
+		replace(
+			replace(
+				replace(ann_wins$cqsf, is.na(ann_wins$cqsf), 0), 
+				ann_wins$cqsf == 1, "stable"), 
+			ann_wins$flats == 1, "sleep"
+		)
+	)
+	indices = cumsum(stretches$lengths)
+	intervals_indices = which(stretches$values != "0")
+	intervals_ends = indices[intervals_indices]
+	intervals_starts = pmax(indices[intervals_indices - 1] +1, 0)
+	intervals = data.table(
+		start = ann_wins[intervals_starts, ][[timecol]], 
+		end = ann_wins[intervals_ends, ][[timecol]],
+		type = stretches$values[intervals_indices],
+		median = mapply( function(x,y) {
+			median(ann_wins[x:y,][[valuecol]])}, 
+				intervals_starts, intervals_ends
+		)
+	)
+	return(intervals)
+}
+
+get_ baselines = function(d, ann_wins) {
+	# Compute baselines obtained with 
+	# different methods
+	# ------------------------------------
+	# Get baseline based on ranking
+	gr = rank_glucose_values(d)
+	median_rank = baseline_from_rank(d, gr) 
+	
+	# Medians - baseline
+	median_grand = median(d[[2]], na.rm=T)
+	
+	# Baseline from sleep periods
+	median_cq = median(ann_wins[flats==1,][[colnames(d)[2]]])	
+	
+	# Compile the data.table with baselines
+	medians = data.table(
+		method = c(
+			'median_rank',
+			'median_grand',
+			'median_cq',
+		),
+		value = c(
+			median_rank,
+			median_grand,
+			median_cq
+		)
+	)
+	return(medians)
+}	
+
+
 # ~~~~~~~~~~~
 # BEGIN
 # ~~~~~~~~~~~
