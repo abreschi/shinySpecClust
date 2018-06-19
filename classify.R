@@ -761,7 +761,7 @@ ann_wins_to_intervals = function(ann_wins, d) {
 	return(intervals)
 }
 
-get_ baselines = function(d, ann_wins) {
+get_baselines = function(d, ann_wins) {
 	# Compute baselines obtained with 
 	# different methods
 	# ------------------------------------
