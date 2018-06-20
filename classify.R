@@ -15,49 +15,52 @@ suppressPackageStartupMessages(library(dplyr))
 # OPTIONS
 # ~~~~~~~
 
-option_list <- list(
-
-	make_option(c("-i", "--input"), 
-		help="File with CGM profile. 2 columns: 
-		<date>, <value>. Has header [default=%default]"),
-
-	make_option(c("-t", "--test_windows"), 
-		help="File with windows. Provide in alternative to 
-		--input. Format is windowId in col1 and raw values 
-		in the other cols. Has NO header"),
-
-	make_option(c("-P", "--parameters"), 
-		help=".Rdata file with trained parameters."),
+options = function() {
+	option_list <- list(
 	
-	make_option(c("-w", "--train_windows"), 
-		help="File with training windows. 
-		Has header, 1st col is window id, 
-		remaining columns are CGM values"),
-
-	make_option(c("-O", "--overlap"), default=0.25,
-		help="Fraction of window overlap. For example 
-		an overlap of 0.25 for 2.5 hour windows is
-		37 mins, meaning a shift of 112 mins. [default=%default]"),
-
-#	make_option(c("-k", "--nb_clusters"), default=3,
-#		help="Number of desired clusters [default=%default]"),
-
-	make_option(c("-o", "--output"), default="stdout",
-		help="Output file name. [default=%default]"),
-
-	make_option(c("-v", "--verbose"), default=FALSE, action="store_true",
-		help="Verbose output")
-
-)
-
-parser <- OptionParser(
-	usage = "%prog [options] file", 
-	option_list=option_list,
-	description = ""
-)
-
-arguments <- parse_args(parser, positional_arguments = TRUE)
-opt <- arguments$options
+		make_option(c("-i", "--input"), 
+			help="File with CGM profile. 2 columns: 
+			<date>, <value>. Has header [default=%default]"),
+	
+		make_option(c("-t", "--test_windows"), 
+			help="File with windows. Provide in alternative to 
+			--input. Format is windowId in col1 and raw values 
+			in the other cols. Has NO header"),
+	
+		make_option(c("-P", "--parameters"), 
+			help=".Rdata file with trained parameters."),
+		
+		make_option(c("-w", "--train_windows"), 
+			help="File with training windows. 
+			Has header, 1st col is window id, 
+			remaining columns are CGM values"),
+	
+		make_option(c("-O", "--overlap"), default=0.25,
+			help="Fraction of window overlap. For example 
+			an overlap of 0.25 for 2.5 hour windows is
+			37 mins, meaning a shift of 112 mins. [default=%default]"),
+	
+	#	make_option(c("-k", "--nb_clusters"), default=3,
+	#		help="Number of desired clusters [default=%default]"),
+	
+		make_option(c("-o", "--output"), default="stdout",
+			help="Output file name. [default=%default]"),
+	
+		make_option(c("-v", "--verbose"), default=FALSE, action="store_true",
+			help="Verbose output")
+	
+	)
+	
+	parser <- OptionParser(
+		usage = "%prog [options] file", 
+		option_list=option_list,
+		description = ""
+	)
+	
+	arguments <- parse_args(parser, positional_arguments = TRUE)
+	opt <- arguments$options
+	return(opt)
+}
 
 
 # ~~~~~~~~~
@@ -805,6 +808,8 @@ script = script[length(script)]
 
 
 if(length(args)!=0 & script == "classify.R") {
+	
+	opt = options()
 
 	print("Running")
 
