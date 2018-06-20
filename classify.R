@@ -611,10 +611,12 @@ fill_gaps = function(cqs, windows) {
 longest_stretch = function(x) {
 	# Initialize resulting vector
 	xo = rep(0, length(x))
-	# Count consecutive strethes
+	# Count consecutive stretches
 	wr = rle(as.numeric(x == 1 & !is.na(x)))
 	# Find relative id of longest stretch of flat windows
 	ll = which.max(wr$lengths[wr$values == 1])
+	# Make sure there is at least one flat period
+	if ( length(ll) == 0 ) {return(xo)}
 	# Find absolute id of longest stretch of flat windows
 	lla = which(wr$values == 1)[ll]
 	# Check if longest stretch is in the middle of the window but the window starts and/or end with a stretch
@@ -780,7 +782,7 @@ get_baselines = function(d, ann_wins) {
 		method = c(
 			'median_rank',
 			'median_grand',
-			'median_cq',
+			'median_cq'
 		),
 		value = c(
 			median_rank,
