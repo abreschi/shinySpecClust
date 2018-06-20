@@ -802,9 +802,13 @@ get_baselines = function(d, ann_wins) {
 # ~~~~~~~~~~~
 
 args = commandArgs(FALSE)
-script = strsplit(strsplit(args[grep("--file", args)], 
-	"=")[[1]][[2]], "/")[[1]]
-script = script[length(script)]
+fileArg = args[grep("--file", args)]
+script = ""
+if ( length(fileArg) != 0 ){
+	script = strsplit(strsplit(fileArg, 
+		"=")[[1]][[2]], "/")[[1]]
+	script = script[length(script)]
+}
 
 
 if(length(args)!=0 & script == "classify.R") {
