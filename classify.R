@@ -15,7 +15,7 @@ suppressPackageStartupMessages(library(dplyr))
 # OPTIONS
 # ~~~~~~~
 
-options = function() {
+def_options = function() {
 	option_list <- list(
 	
 		make_option(c("-i", "--input"), 
@@ -620,6 +620,8 @@ longest_stretch = function(x) {
 	ll = which.max(wr$lengths[wr$values == 1])
 	# Make sure there is at least one flat period
 	if ( length(ll) == 0 ) {return(xo)}
+#	# Check if the longest stretch is at the beginning or end of window
+#	if ( ll == 1 | ll == length(wr$length) ) {return(xo)}
 	# Find absolute id of longest stretch of flat windows
 	lla = which(wr$values == 1)[ll]
 	# Check if longest stretch is in the middle of the window but the window starts and/or end with a stretch
@@ -813,7 +815,7 @@ if ( length(fileArg) != 0 ){
 
 if(length(args)!=0 & script == "classify.R") {
 	
-	opt = options()
+	opt = def_options()
 
 	print("Running")
 
