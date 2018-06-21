@@ -225,7 +225,7 @@ server <- function(input, output, session) {
 		if (is.null(v$data)) return()
 		df = v$data
 		dygraph(df_to_xts(df), ylab=axisTitle) %>%
-		dyOptions(axisLabelWidth=90)
+		dyOptions(axisLabelWidth=90, useDataTimezone = TRUE)
 	})
 	output[["cgmProfile"]] = dygraph_cgm
 	# Description for dygraph navigation commands
@@ -277,7 +277,7 @@ server <- function(input, output, session) {
 			print(head(df))
 			dygraph(df) %>%
 			dyAxis("y", label = axisTitle) %>%
-			dyOptions(axisLabelWidth=90) %>%
+			dyOptions(axisLabelWidth=90, useDataTimezone = TRUE) %>%
 			dyOptions(colors=plot_colors, drawPoints=T, pointSize=2)
 		})
 		# Table with glucotype frequencies
