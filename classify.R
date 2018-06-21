@@ -759,7 +759,10 @@ ann_wins_to_intervals = function(ann_wins, d) {
 	indices = cumsum(stretches$lengths)
 	intervals_indices = which(stretches$values != "0")
 	intervals_ends = indices[intervals_indices]
-	intervals_starts = pmax(indices[intervals_indices - 1] +1, 0)
+	intervals_starts = indices[intervals_indices - 1] +1
+	# Special case the interval is at the beginning of recordings
+	if (intervals_indices[1] == 1 ) {
+		intervals_starts = c(1, intervals_starts) }
 	intervals = data.table(
 		start = ann_wins[intervals_starts, ][[timecol]], 
 		end = ann_wins[intervals_ends, ][[timecol]],
