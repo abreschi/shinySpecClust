@@ -10,6 +10,7 @@ suppressPackageStartupMessages(library(pdist))
 suppressPackageStartupMessages(library(optparse))
 suppressPackageStartupMessages(library(xts))
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(mmand))
 
 # ~~~~~~~
 # OPTIONS
@@ -611,19 +612,21 @@ fill_gaps = function(cqs, windows) {
 	return (cqsf)
 }
 
-longest_stretch = function(x) {
+longest_stretch = function(x, fill=3) {
 	# Initialize resulting vector
 	xo = rep(0, length(x))
+	# Close gaps if values are spearated by <fill>
+	x = closing(x, rep(1, fill))
 	# Count consecutive stretches
 	wr = rle(as.numeric(x == 1 & !is.na(x)))
 	# Find relative id of longest stretch of flat windows
 	ll = which.max(wr$lengths[wr$values == 1])
 	# Make sure there is at least one flat period
 	if ( length(ll) == 0 ) {return(xo)}
-#	# Check if the longest stretch is at the beginning or end of window
-#	if ( ll == 1 | ll == length(wr$length) ) {return(xo)}
 	# Find absolute id of longest stretch of flat windows
 	lla = which(wr$values == 1)[ll]
+	# Check if the longest stretch is at the beginning or end of window
+	if ( lla == 1 | lla == length(wr$length) ) {return(xo)}
 	# Check if longest stretch is in the middle of the window but the window starts and/or end with a stretch
 	if ( (ll > 1 & ll < sum(wr$values)) & (wr$values[1] == 1 | wr$values[length(wr$values)] == 1) ) {return(xo)}
 	#cumsum(wr$lengths)[wr$values == 0][ll] > cumsum(wr$lengths)[wr$values == 1][ll]
@@ -674,7 +677,7 @@ sleep_periods = function(d) {
 			),
 			aes_string(timecol, valuecol)) + 
 		geom_line() + 
-		geom_point(aes(color=as.factor(cq))) + 
+		geom_point(aes(color=as.factor(cqs))) + 
 		scale_color_manual(values=rainbow(10)) + 
 		facet_wrap(~days, scales='free_x') + 
 	#	geom_segment(data=wins[windowPos==1, xend:=get(timecol)+hours(2)+minutes(30)], aes_string(
@@ -724,12 +727,13 @@ shift_24_hours = function(wins, d) {
 		flats_i = ann_wins[, longest_stretch(cqsf), by="factor"][["V1"]]; 
 		ann_wins$flats = as.numeric( ann_wins$flats | flats_i) 
 		# Plot glucose values with shaded shifted windows of 24 hours
-		gp = ggplot(cbind(ann_wins, days=floor_date(ann_wins[[colnames(d)[1]]], "days")), 
+		gp = ggplot(cbind(ann_wins, col=ann_wins[["factor"]]%%2==1, 
+				days=floor_date(ann_wins[[colnames(d)[1]]], "days")), 
 			aes_string(colnames(d)[1], colnames(d)[2])) + 
 			facet_wrap(~days, scales="free_x") + 
-			geom_vline(aes(xintercept=DisplayDate_5_min, alpha=flats), color='pink', size=2) + 
+			geom_vline(aes_string(xintercept=timecol, alpha="flats"), color='pink', size=2) + 
 			geom_line() + 
-			geom_vline(aes(xintercept=DisplayDate_5_min, color=factor%%2==1), alpha=0.1, size=2) + 
+			geom_vline(aes_string(xintercept=timecol, color="col"), alpha=0.1, size=2) + 
 			scale_color_manual(values=c("orange", "blue"))
 	}
 	return(ann_wins)
