@@ -566,9 +566,23 @@ get_baseline_rank = function(x) {
 
 smooth_cq = function(cq) {
 	cqs = as.integer(rollapply(zoo(cq), 5, 
-		median, na.rm=T, na.pad=T, partial=T))
+		median, na.rm=T, na.pad=T, partial=T,
+		coredata = TRUE))
 	return(cqs)
 }
+
+decreasing_cq = function(windows) {
+	# Returns negative trend of windows
+	#gradient_qs = apply(windows, 1, 
+	#	function(x) mean(diff(x)))
+	gradient_qs = apply(windows, 1, function(x) 
+		quantile(sign(diff(x)), 0.75, na.rm=T))
+	# 1 when trend is negative, 0 otherwise
+	decr_bin = replace(rep(0, nrow(windows)), 
+		gradient_qs<=0, 1)
+	return (decr_bin)
+}
+
 
 cq_gap_wilcox = function(windows, x, y) {
 	pvalue = mapply(function(x,y) {
@@ -650,8 +664,11 @@ sleep_periods = function(d) {
 	win_cv = apply(windows, 1, cv)
 	cq = as.numeric(cut(win_cv, c(0, quantile(win_cv, 
 		probs=c(3:10)/10, na.rm=T))))
+	# Add decreasing windows to low variability windows, even 
+	# if they have high variability
+	decr_bin = decreasing_cq(windows)
+	cq[decr_bin == 1 & !is.na(cq)] = 1
 	wins$cq = cq[wins$windowId]
-	#wins$day = floor_date(wins$DisplayDate_5_min, 'days')
 	# Smooth quantiles - TODO: improve padding
 	cqs = smooth_cq(cq) 
 	wins$cqs = cqs[wins[["windowId"]]]
@@ -680,22 +697,14 @@ sleep_periods = function(d) {
 		geom_point(aes(color=as.factor(cqs))) + 
 		scale_color_manual(values=rainbow(10)) + 
 		facet_wrap(~days, scales='free_x') + 
-	#	geom_segment(data=wins[windowPos==1, xend:=get(timecol)+hours(2)+minutes(30)], aes_string(
-	#			x=timecol, 
-	#			xend="xend",
-	#			y=30,
-	#			yend=30, 
-	#			color=as.factor(cq)
-	#		), 
-	#		size=2, alpha=0.5) + 
 		geom_vline(data=wins[wins[, un:=length(unique(cqs))==1, 
 			by=c(timecol)][["un"]]][cqs==1,], 
 			aes_string(xintercept=timecol), alpha=0.2, size=2) +
 		geom_vline(data=data.table(wins)[cqs==1], aes_string(xintercept=timecol), 
 			alpha=0.2, size=2, color='pink') 
-#		geom_hline(yintercept=92) +
-#		geom_hline(yintercept=100)
-#	ggsave('tmp.pdf', plot=gp, h=15, w=20)
+	#	geom_hline(yintercept=92) +
+	#	geom_hline(yintercept=100)
+	#ggsave('tmp.pdf', plot=gp, h=15, w=20)
 	# Find the longest periods of low variation per day
 	return(ann_wins)
 }
@@ -772,7 +781,36 @@ ann_wins_to_intervals = function(ann_wins, d) {
 				intervals_starts, intervals_ends
 		)
 	)
+	intervals = adjust_sleep_intervals(intervals)
 	return(intervals)
+}
+
+
+
+adjust_sleep_intervals = function(intervals) {
+	# Consider sleep only if it overlaps
+	# most recurrent skeep hour bin
+	hours_sleep = unlist(apply(
+		intervals[type=="sleep"], 1, function(x) 
+		hour(seq(ymd_hms(x[1]), ymd_hms(x[2]), 
+		by='hours'))))
+	most_freq_hour = as.numeric(names(
+		sort(table(hours_sleep), dec=T)[1]))
+	a = ymd_hms(intervals[[2]])
+	b = ymd_hms(intervals[[2]])
+	hour(a) = most_freq_hour
+	hour(b) = most_freq_hour
+	minute(a) = 0
+	minute(b) = 0
+	most_freq_int = interval(a-hours(1),b+hours(1))
+	int = interval(intervals[[1]], intervals[[2]])
+	intervals[["adjusted"]] = "stable"
+	adjusted_sleep = which(mapply(function(x,y) 
+		as.logical(lubridate::intersect(x,y)), 
+		most_freq_int, interval(intervals[[1]], 
+		intervals[[2]])))
+	intervals[["adjusted"]][adjusted_sleep] = "sleep"
+	return (intervals)
 }
 
 get_baselines = function(d, ann_wins) {
