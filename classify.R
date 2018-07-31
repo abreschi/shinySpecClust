@@ -568,6 +568,9 @@ smooth_cq = function(cq) {
 	cqs = as.integer(rollapply(zoo(cq), 5, 
 		median, na.rm=T, na.pad=T, partial=T,
 		coredata = TRUE))
+	close_gaps = closing(is.na(cq), c(1,1,1,1,1))
+	cqs = replace(cqs, 
+		which(as.logical(close_gaps)), NA)
 	return(cqs)
 }
 
@@ -629,8 +632,8 @@ fill_gaps = function(cqs, windows) {
 longest_stretch = function(x, fill=3) {
 	# Initialize resulting vector
 	xo = rep(0, length(x))
-	# Close gaps if values are spearated by <fill>
-	x = closing(x, rep(1, fill))
+	## Close gaps if values are spearated by <fill>
+	#x = closing(x, rep(1, fill))
 	# Count consecutive stretches
 	wr = rle(as.numeric(x == 1 & !is.na(x)))
 	# Find relative id of longest stretch of flat windows
@@ -664,10 +667,10 @@ sleep_periods = function(d) {
 	win_cv = apply(windows, 1, cv)
 	cq = as.numeric(cut(win_cv, c(0, quantile(win_cv, 
 		probs=c(3:10)/10, na.rm=T))))
-	# Add decreasing windows to low variability windows, even 
-	# if they have high variability
-	decr_bin = decreasing_cq(windows)
-	cq[decr_bin == 1 & !is.na(cq)] = 1
+	## Add decreasing windows to low variability windows, even 
+	## if they have high variability
+	#decr_bin = decreasing_cq(windows)
+	#cq[decr_bin == 1 & !is.na(cq)] = 1
 	wins$cq = cq[wins$windowId]
 	# Smooth quantiles - TODO: improve padding
 	cqs = smooth_cq(cq) 
