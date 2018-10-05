@@ -109,7 +109,8 @@ ui <- fluidPage(
 			HTML("<p>
 			Visualize your CGM profile and discover your glucotype! 
 			This webpage provides an interface to the glucotype classification
-			described in <a href='#'>Hall et al</a>. 
+			described in <a href='https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.2005143'
+			target='_blank'>Hall et al</a>. 
 			To find out about your glucotype please upload a tab-delimited
 			file with two columns, containing the time of measurement and
 			the glucose concentration, following the format in 
@@ -261,7 +262,14 @@ server <- function(input, output, session) {
 		cachedF = "glucotypes.df.tsv"
 		if (!file.exists(cachedF)) {
 			#print(head(preprocess_cgm(cgm)));
-			df = classify_windows(cgm, train_windows, param_list, 0.25)
+			res = classify_glucotype(cgm, train_windows, param_list, 0.25)
+			train = res$train
+			test = res$test
+			df = reshape_test_windows(test, train)
+			glucotypes = define_glucotypes(train)
+			DT = data.table(test$cgm_w_windows)[windowPos==1,] %>%
+				.[,label:=glucotypes[test$test_labels[windowId]]] %>%
+				.[,c(4,6)]
 #			Have to think of a better way to cache dataframe
 #			write.zoo(df, file = cachedF, quote=F, sep='\t')
 		} else {
@@ -282,7 +290,8 @@ server <- function(input, output, session) {
 		})
 		# Table with glucotype frequencies
 		freq = data.frame("Fraction of time" = 
-				colMeans(!is.na(df)), check.names=F)
+				#colMeans(!is.na(df)), check.names=F)
+				as.matrix(prop.table(table(DT$label))), check.names=F)
 		output[["glucotypeTable"]] = renderTable(
 			rownames = TRUE, {
 			freq

@@ -495,22 +495,30 @@ prepare_test_windows = function(test_windows, param_list) {
 	return(test)
 }
 
-classify_windows = function(cgm, train_windows, param_list, window_overlap) {
+classify_glucotype = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for classifying windows
 	test = prepare_test_set(cgm, param_list, window_overlap)
 	train = prepare_training_set(test, train_windows, param_list)
 	test = predict_windows(test, train)
-	ts = reshape_test_windows(test, train)
-	return (ts)
+	return (list('test'=test, 'train'=train))
 }
 
+
+classify_windows = function(cgm, train_windows, param_list, window_overlap) {
+	# wrapper function for classifying windows
+	res = classify_glucotype(cgm, train_windows,
+		param_list, window_overlap)
+	ts = reshape_test_windows(res$test, res$train)
+	return (ts)
+}
 
 classify_windows2 = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for predicting windows
 	# same as classify_windows but the output has only the window labels
-	test = prepare_test_set(cgm, param_list, window_overlap)
-	train = prepare_training_set(test, train_windows, param_list)
-	test = predict_windows(test, train)
+	res = classify_glucotype(cgm, train_windows,
+		param_list, window_overlap)
+	test = res$test
+	train = res$train
 	glucotypes = define_glucotypes(train)
 	DT = data.table(test$cgm_w_windows)[windowPos==1,] %>% 
 		.[,label:=glucotypes[test$test_labels[windowId]]] %>% 
