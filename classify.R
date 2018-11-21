@@ -226,6 +226,11 @@ make_windows = function(m, window_size, w_overlap) {
 	window_starts = as.numeric(rollapply(zoo(m[[1]]), 
 		size, function(x) return(x[1]), by=shift))
 #	print(as_datetime(window_starts))
+	# Special case: all equal CGM values
+	which_all_equal = which(apply(values, 1,
+		function(x) sum(diff(x))) == 0)
+	if (length(which_all_equal) > 0) {
+		values[which_all_equal, 1] = values[which_all_equal, 1] + 1}
 	return(values)
 }
 
