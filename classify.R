@@ -179,8 +179,14 @@ preprocess_cgm = function(m) {
 	# Convert to proper date time
 	m[,1] = ymd_hms(m[[1]])
 	
+	# Thicken dates with 5 min frequency
+	# Handle exception with already rounded datetimes
+	thickened = tryCatch( { thicken( m, interval="5 min")[,-1] }, 
+		error=function(c) m[,2:1] )
+
 	# Pad dates
-	padm = pad( thicken( m, interval="5 min" )[,-1])
+	padm = pad( thickened )
+
 	# Swap columns after padding
 	padm = padm[, c(2,1)]
 

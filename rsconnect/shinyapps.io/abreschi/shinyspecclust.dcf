@@ -5,6 +5,6 @@ account: abreschi
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 384358
-bundleId: 1625586
+bundleId: 1712126
 url: https://abreschi.shinyapps.io/shinySpecClust/
-when: 1538762966.53962
+when: 1542768751.29501
