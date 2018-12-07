@@ -143,9 +143,11 @@ add_cid_dtw_to_db = function() {
 }
 
 # 
-get_na_stretches = function(x, minutes) {
-	minutes = 90
-	na_len = minutes/5
+get_na_stretches = function(x, minutes="90 min", 
+		cgm_freq="5 min") {
+	#minutes = 90
+	#na_len = minutes/5
+	na_len = duration(minutes)/duration(cgm_freq)
 	gluc_na = rle(is.na(x))
 	gluc_na$values = gluc_na$values & gluc_na$lengths >= na_len
 	gluc_na_idx = which(inverse.rle(gluc_na))
@@ -175,26 +177,40 @@ smooth_WA = function(x) {
 
 
 # preprocess
-preprocess_cgm = function(m) {
+preprocess_cgm = function(m, gap='90 min', cgm_freq="5 min") {
+	# m is a data.table with at least two columns
+	# where the first is datetime string and 
+	# the second is a numerical value
+
 	# Convert to proper date time
 	m[,1] = ymd_hms(m[[1]])
 	
 	# Thicken dates with 5 min frequency
 	# Handle exception with already rounded datetimes
-	thickened = tryCatch( { thicken( m, interval="5 min")[,-1] }, 
-		error=function(c) m[,2:1] )
+	thickened = tryCatch( { thicken( m, interval=cgm_freq)[,-1] }, 
+		#error=function(c) m[,2:1] )
+		error=function(c) {m[[1]] = m[[1]] + duration('1 sec');
+		thicken( m, interval=cgm_freq)[,-1] } )
+	thick_idx = ncol(thickened)
+
+	# Make group for padding
+	thickened$group = factor(c(0, 
+		cumsum(diff(thickened[[thick_idx]]) > duration(gap))))
 
 	# Pad dates
-	padm = pad( thickened )
+	padm = pad( thickened, group="group" )[,-c("group")]
 
 	# Swap columns after padding
-	padm = padm[, c(2,1)]
+	#padm = padm[, c(2,1)]
+	setcolorder(padm, colnames(padm)[c(
+		thick_idx, 1:(thick_idx-1))])
 
 	# Make sure glucose values are numeric
 	padm[,2] = as.numeric(padm[[2]])
 
-	# Impute missing values up to <minutes>	
-	gluc_na_idx = get_na_stretches(padm[[2]], minutes)
+	## # Impute missing values up to <minutes>	
+	## gluc_na_idx = get_na_stretches(padm[[2]], 
+	## 	gap, cgm_freq=cgm_freq)
 
 	# Impute missing values
 	glucImp = na.interpolation(padm[[2]], option="stine")
@@ -202,12 +218,12 @@ preprocess_cgm = function(m) {
 	# Smooth with weigthed average
 	smoothed = smooth_WA(glucImp)
 	 
-	# Replace imputed values with NAs when 
-	# the stretch was too long
-	# Do this after smoothing
-	smoothed[gluc_na_idx] = NA
+	## # Replace imputed values with NAs when 
+	## # the stretch was too long
+	## # Do this after smoothing
+	## smoothed[gluc_na_idx] = NA
 
-	# Assign smoothed values to padded datable
+	# Assign smoothed values to padded datatable
 	padm[[2]] = smoothed
 
 	return (padm)
