@@ -226,6 +226,9 @@ preprocess_cgm = function(m, gap='90 min', cgm_freq="5 min") {
 	# Assign smoothed values to padded datatable
 	padm[[2]] = smoothed
 
+	# Rename datetime column changed after thickening
+	colnames(padm)[1] = colnames(m)[1]
+
 	return (padm)
 }
 
