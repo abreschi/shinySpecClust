@@ -125,6 +125,13 @@ interval_to_5_mins = function(interval) {
 	return (mins)
 }
 
+
+# Assign same day to
+center_time_night = function(x, year=2000, month=1, day=1) {
+    update(x, year=year, month=month,
+    day=day + as.numeric(hour(x)>=0 & hour(x)<=12))
+}
+
 # create the distance metric
 cid_dtw_dist <- function(time.seriesQ, time.seriesC, shakoechiba.window.size=2){
           CE_Q = sqrt(sum(diff(time.seriesQ)^2))
