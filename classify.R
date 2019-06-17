@@ -200,24 +200,22 @@ preprocess_cgm = function(m, gap='90 min', cgm_freq="5 min") {
 		thicken( m, interval=cgm_freq)[,-1] } )
 	thick_idx = ncol(thickened)
 
-	# Make group for padding
-	thickened$group = factor(c(0, 
-		cumsum(diff(thickened[[thick_idx]]) > duration(gap))))
-
-	# Pad dates
-	padm = pad( thickened, group="group" )[,-c("group")]
+##	# Make group for padding
+##	thickened$group = factor(c(0, 
+##		cumsum(diff(thickened[[thick_idx]]) > duration(gap))))
+##	# Pad dates
+##	padm = pad( thickened, group="group" )
+##	padm$group = NULL
+	padm = pad( thickened )
 
 	# Swap columns after padding
-	#padm = padm[, c(2,1)]
-	setcolorder(padm, colnames(padm)[c(
-		thick_idx, 1:(thick_idx-1))])
+	setcolorder(padm, colnames(padm)[c(thick_idx, 1:(thick_idx-1))])
 
 	# Make sure glucose values are numeric
 	padm[,2] = as.numeric(padm[[2]])
 
-	## # Impute missing values up to <minutes>	
-	## gluc_na_idx = get_na_stretches(padm[[2]], 
-	## 	gap, cgm_freq=cgm_freq)
+	# Impute missing values up to <minutes>	
+	gluc_na_idx = get_na_stretches(padm[[2]], gap, cgm_freq=cgm_freq)
 
 	# Impute missing values
 	glucImp = na.interpolation(padm[[2]], option="stine")
@@ -225,10 +223,9 @@ preprocess_cgm = function(m, gap='90 min', cgm_freq="5 min") {
 	# Smooth with weigthed average
 	smoothed = smooth_WA(glucImp)
 	 
-	## # Replace imputed values with NAs when 
-	## # the stretch was too long
-	## # Do this after smoothing
-	## smoothed[gluc_na_idx] = NA
+	# Replace imputed values with NAs when the stretch was too long
+	# Do this after smoothing
+	smoothed[gluc_na_idx] = NA
 
 	# Assign smoothed values to padded datatable
 	padm[[2]] = smoothed
@@ -534,8 +531,11 @@ prepare_test_windows = function(test_windows, param_list) {
 
 classify_glucotype = function(cgm, train_windows, param_list, window_overlap) {
 	# wrapper function for classifying windows
+	print("Prepare test")
 	test = prepare_test_set(cgm, param_list, window_overlap)
+	print("Prepare training") 
 	train = prepare_training_set(test, train_windows, param_list)
+	print("Predicting")
 	test = predict_windows(test, train)
 	return (list('test'=test, 'train'=train))
 }
